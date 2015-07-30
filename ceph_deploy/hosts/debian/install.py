@@ -5,9 +5,23 @@ from ceph_deploy.util import pkg_managers
 from ceph_deploy.util.paths import gpg
 
 
+def map_components(components):
+    packages = []
+
+    # Purposely ignoring ceph-mds
+    if (('ceph-osd' in components) or
+        ('ceph-mon' in components)
+    ):
+        packages.append('ceph')
+    if 'ceph-common' in components:
+        packages.append('ceph-common')
+    if 'radosgw' in components:
+        packages.append('radosgw')
+
+    return packages
+
 def install(distro, version_kind, version, adjust_repos, **kw):
-    # note: when split packages for ceph land for Debian/Ubuntu,
-    # `kw['components']` will have those. Unused for now.
+    packages = map_components(kw.get('components', []))
     codename = distro.codename
     machine = distro.machine_type
 
@@ -81,9 +95,8 @@ def install(distro, version_kind, version, adjust_repos, **kw):
         )
 
     # TODO this does not downgrade -- should it?
-    remoto.process.run(
-        distro.conn,
-        [
+    if len(packages):
+        cmd = [
             'env',
             'DEBIAN_FRONTEND=noninteractive',
             'DEBIAN_PRIORITY=critical',
@@ -94,15 +107,11 @@ def install(distro, version_kind, version, adjust_repos, **kw):
             '--assume-yes',
             'install',
             '--',
-            'ceph',
-            'ceph-mds',
-            'ceph-common',
-            'ceph-fs-common',
-            'radosgw',
-            # ceph only recommends gdisk, make sure we actually have
-            # it; only really needed for osds, but minimal collateral
-            'gdisk',
-            ],
+        ]
+        cmd.extend(packages)
+        remoto.process.run(
+            distro.conn,
+            cmd
         )
 
 
